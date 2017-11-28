@@ -25,6 +25,7 @@ THE SOFTWARE.
 """
 
 from .agilentBaseInfiniium import *
+import struct
 
 AcquisitionModeMapping = {
         'etim': ('normal', 'equivalent_time'),
