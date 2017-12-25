@@ -37,7 +37,7 @@ AcquisitionModeMapping = {
         'segh': ('high_resolution', 'segmented')
 }
 AcquisitionType = set(['normal', 'peak_detect', 'high_resolution'])
-VerticalCoupling = set(['dc'])
+VerticalCoupling = set(['ac', 'dc'])
 ScreenshotImageFormatMapping = {
         'tif': 'tif',
         'tiff': 'tif',
@@ -193,7 +193,69 @@ class agilents(agilentBaseInfiniium):
         self._write(":display:data? %s, screen, on, %s" % (format, 'invert' if invert else 'normal'))
         
         return self._read_ieee_block()
-    
+
+    def _get_channel_input_impedance(self, index):
+        index = ivi.get_index(self._analog_channel_name, index)
+        if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
+            s = self._ask(":%s:input?" % self._channel_name[index]).lower()
+            if s in ['dc50', 'dcfifty']:
+                self._channel_input_impedance[index] = 50
+            else:
+                self._channel_input_impedance[index] = 1000000
+            self._set_cache_valid(index=index)
+        return self._channel_input_impedance[index]
+
+    def _set_channel_input_impedance(self, index, value):
+        index = ivi.get_index(self._analog_channel_name, index)
+        if value not in [50, 1000000]:
+            raise ivi.ValueNotSupportedException()
+        # obtain coupling
+        coupling = self._get_channel_coupling(index)
+        if value == 50 and coupling == 'ac':
+            raise ivi.ValueNotSupportedException('AC coupling not supported for 50 Ohm input impedance.')
+        if not self._driver_operation_simulate:
+            if coupling == 'dc':
+                if value == 50:
+                    transmitted_value = 'dc50'
+                else:
+                    transmitted_value = 'dc'
+            else:
+                transmitted_value = 'ac'
+            self._write(":%s:input %s" % (self._channel_name[index], transmitted_value))
+        self._channel_input_impedance[index] = value
+        self._set_cache_valid(index=index)
+
+    def _get_channel_coupling(self, index):
+        index = ivi.get_index(self._analog_channel_name, index)
+        if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
+            s = self._ask(":%s:input?" % self._channel_name[index]).lower()
+            if s in ['dc', 'dc50', 'dcfifty']:
+                self._channel_coupling[index] = 'dc'
+            else:
+                self._channel_coupling[index] = 'ac'
+            self._set_cache_valid(index=index)
+        return self._channel_coupling[index]
+
+    def _set_channel_coupling(self, index, value):
+        index = ivi.get_index(self._analog_channel_name, index)
+        if value not in VerticalCoupling:
+            raise ivi.ValueNotSupportedException()
+        # obtain impedance
+        impedance = self._get_channel_input_impedance(index)
+        if impedance == 50 and value == 'ac':
+            raise ivi.ValueNotSupportedException('AC coupling not supported for 50 Ohm input impedance.')
+        if not self._driver_operation_simulate:
+            if value == 'dc':
+                if impedance == 50:
+                    transmitted_value = 'dc50'
+                else:
+                    transmitted_value = 'dc'
+            else:
+                transmitted_value = 'ac'
+            self._write(":%s:input %s" % (self._channel_name[index], transmitted_value))
+        self._channel_coupling[index] = value
+        self._set_cache_valid(index=index)
+
     def _get_channel_common_mode(self, index):
         index = ivi.get_index(self._analog_channel_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
