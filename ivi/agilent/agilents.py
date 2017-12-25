@@ -38,6 +38,7 @@ AcquisitionModeMapping = {
 }
 AcquisitionType = set(['normal', 'peak_detect', 'high_resolution'])
 VerticalCoupling = set(['ac', 'dc'])
+TriggerTypeMapping['width'] = 'pwidth'
 ScreenshotImageFormatMapping = {
         'tif': 'tif',
         'tiff': 'tif',
@@ -360,6 +361,53 @@ class agilents(agilentBaseInfiniium):
             self._write(":%s:display:scale %e" % (self._channel_name[index], value))
         self._channel_display_scale[index] = value
         self._set_cache_valid(index=index)
+
+    def _get_trigger_type(self):
+        # FIXME: glitch trigger only triggers to small than width values in the s-series oscilloscopes
+        if not self._driver_operation_simulate and not self._get_cache_valid():
+            value = self._ask(":trigger:mode?").lower()
+            if value == 'edge':
+                src = self._ask(":trigger:edge:source?").lower()
+                if src == 'line':
+                    value = 'ac_line'
+            else:
+                value = [k for k,v in TriggerTypeMapping.items() if v==value][0]
+            self._trigger_type = value
+            self._set_cache_valid()
+        return self._trigger_type
+
+    def _set_trigger_type(self, value):
+        if value not in TriggerTypeMapping:
+            raise ivi.ValueNotSupportedException()
+        if not self._driver_operation_simulate:
+            self._write(":trigger:mode %s" % TriggerTypeMapping[value])
+            if value == 'ac_line':
+                self._write(":trigger:edge:source line")
+        self._trigger_type = value
+        self._set_cache_valid()
+
+    def _get_trigger_source(self):
+        if not self._driver_operation_simulate and not self._get_cache_valid():
+            type = self._get_trigger_type()
+            value = self._ask(":trigger:%s:source?" % TriggerTypeMapping[type]).lower()
+            if value.startswith('chan'):
+                value = 'channel' + value[4:]
+            self._trigger_source = value
+            self._set_cache_valid()
+        return self._trigger_source
+
+    def _set_trigger_source(self, value):
+        # FIXME: what about the external trigger source?
+        if hasattr(value, 'name'):
+            value = value.name
+        value = str(value)
+        if value not in self._channel_name:
+            raise ivi.UnknownPhysicalNameException()
+        if not self._driver_operation_simulate:
+            type = self._get_trigger_type()
+            self._write(":trigger:%s:source %s" % (TriggerTypeMapping[type], value))
+        self._trigger_source = value
+        self._set_cache_valid()
     
     def _measurement_fetch_waveform(self, index):
         index = ivi.get_index(self._channel_name, index)
