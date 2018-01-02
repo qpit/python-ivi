@@ -362,8 +362,26 @@ class agilents(agilentBaseInfiniium):
         self._channel_display_scale[index] = value
         self._set_cache_valid(index=index)
 
+    def _get_trigger_level(self):
+        if not self._driver_operation_simulate and not self._get_cache_valid():
+            # find channel source
+            source = self.trigger.source
+            self._trigger_level = float(self._ask(":trigger:level? %s" % source))
+            self._set_cache_valid()
+        return self._trigger_level
+
+    def _set_trigger_level(self, value):
+        value = float(value)
+        if not self._driver_operation_simulate:
+            # find channel source
+            source = self._trigger_source
+            self._write(":trigger:level %s,%e" % (source, value))
+        self._trigger_level = value
+        self._set_cache_valid()
+        for i in range(self._analog_channel_count): self._set_cache_valid(False, 'channel_trigger_level', i)
+
     def _get_trigger_type(self):
-        # FIXME: glitch trigger only triggers to small than width values in the s-series oscilloscopes
+        # FIXME: glitch trigger only triggers to smaller than width values in the s-series oscilloscopes
         if not self._driver_operation_simulate and not self._get_cache_valid():
             value = self._ask(":trigger:mode?").lower()
             if value == 'edge':
