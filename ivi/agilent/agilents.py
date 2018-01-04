@@ -433,7 +433,7 @@ class agilents(agilentBaseInfiniium):
         if self._driver_operation_simulate:
             return list()
         
-        self._write(":waveform:byteorder msbfirst")
+        self._write(":waveform:byteorder lsbfirst")
         self._write(":waveform:format word")
         self._write(":waveform:streaming on")
         self._write(":waveform:source %s" % self._channel_name[index])
@@ -463,12 +463,12 @@ class agilents(agilentBaseInfiniium):
             raise UnexpectedResponseException()
         
         self._write(":waveform:data?")
-        
+
         # Read waveform data
         raw_data = self._read_ieee_block()
 
         # Store in trace object
-        trace.y_raw = array.array('H', raw_data[0:points * 2])
+        trace.y_raw = array.array('h', raw_data[0:points * 2])
 
         return trace
     
