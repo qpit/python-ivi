@@ -50,6 +50,29 @@ ScreenshotImageFormatMapping = {
         'jpeg': 'jpg',
         'gif': 'gif'}
 SampleMode = set(['real_time', 'equivalent_time', 'segmented'])
+MeasurementFunctionMapping = {
+        'rise_time': 'risetime',
+        'fall_time': 'falltime',
+        'frequency': 'frequency',
+        'period': 'period',
+        'voltage_rms': 'vrms display,ac',
+        'voltage_peak_to_peak': 'vpp',
+        'voltage_max': 'vmax',
+        'voltage_min': 'vmin',
+        'voltage_high': 'vtop',
+        'voltage_low': 'vbase',
+        'voltage_average': 'vaverage display',
+        'width_negative': 'nwidth',
+        'width_positive': 'pwidth',
+        'duty_cycle_positive': 'dutycycle',
+        'amplitude': 'vamplitude',
+        'voltage_cycle_rms': 'vrms cycle,ac',
+        'voltage_cycle_average': 'vaverage cycle',
+        'overshoot': 'overshoot',
+        'preshoot': 'preshoot',
+        'ratio': 'vratio',
+        'phase': 'phase',
+        'delay': 'delay'}
 
 class agilents(agilentBaseInfiniium):
     "Agilent Infiniium S series IVI oscilloscope driver"
@@ -432,8 +455,11 @@ class agilents(agilentBaseInfiniium):
 
         if self._driver_operation_simulate:
             return list()
-        
-        self._write(":waveform:byteorder lsbfirst")
+
+        if sys.byteorder == 'little':
+            self._write(":waveform:byteorder lsbfirst")
+        else:
+            self._write(":waveform:byteorder msbfirst")
         self._write(":waveform:format word")
         self._write(":waveform:streaming on")
         self._write(":waveform:source %s" % self._channel_name[index])
@@ -506,6 +532,32 @@ class agilents(agilentBaseInfiniium):
                              self._reference_level_high,
                              self._reference_level_middle,
                              self._reference_level_low))
+
+    def _measurement_fetch_waveform_measurement(self, index, measurement_function, ref_channel = None):
+        "just a copy from agilentBaseScope so that the local MeasurementFunctionMapping is used"
+        index = ivi.get_index(self._channel_name, index)
+        if index < self._analog_channel_count:
+            if measurement_function not in MeasurementFunctionMapping:
+                raise ivi.ValueNotSupportedException()
+            func = MeasurementFunctionMapping[measurement_function]
+        else:
+            if measurement_function not in MeasurementFunctionMappingDigital:
+                raise ivi.ValueNotSupportedException()
+            func = MeasurementFunctionMappingDigital[measurement_function]
+        if not self._driver_operation_simulate:
+            l = func.split(' ')
+            l[0] = l[0] + '?'
+            if len(l) > 1:
+                l[-1] = l[-1] + ','
+            func = ' '.join(l)
+            query = ":measure:%s %s" % (func, self._channel_name[index])
+            if measurement_function in ['ratio', 'phase', 'delay']:
+                if hasattr(ref_channel, 'name'):
+                    ref_channel = ref_channel.name
+                ref_index = ivi.get_index(self._channel_name, ref_channel)
+                query += ", %s" % self._channel_name[ref_index]
+            return float(self._ask(query))
+        return 0
 
     def _set_working_directory(self,value):
         if not self._driver_operation_simulate:
