@@ -480,7 +480,33 @@ class agilents(agilentBaseInfiniium):
             self._write(":acquire:complete 100")
             self._write(":digitize")
             self._set_cache_valid(False, 'trigger_continuous')
-    
+
+    def _get_reference_levels(self):
+        if not self._driver_operation_simulate and not self._get_cache_valid():
+            high, middle, low = self._ask(":measure:thresholds:percent? %s" % self.channels[0].name).split(',')
+            self._reference_level_high = float(high)
+            self._reference_level_low = float(low)
+            self._reference_level_middle = float(middle)
+            self._set_cache_valid()
+            self._set_cache_valid('reference_level_high')
+            self._set_cache_valid('reference_level_low')
+            self._set_cache_valid('reference_level_middle')
+
+    def _set_reference_level_high(self, value):
+        value = float(value)
+        if value < 5: value = 5
+        if value > 95: value = 95
+        if not self._driver_operation_simulate and not self._get_cache_valid():
+            self._get_reference_levels()
+        self._reference_level_high = value
+        if not self._driver_operation_simulate:
+            for ii in range(len(self.channels)):
+                self._write(":measure:thresholds percent, %s, %e, %e, %e" %
+                            (self.channels[ii].name,
+                             self._reference_level_high,
+                             self._reference_level_middle,
+                             self._reference_level_low))
+
     def _set_working_directory(self,value):
         if not self._driver_operation_simulate:
             self._write(":DISK:CDIRECTORY %s" % '\"'+value+'\"')
