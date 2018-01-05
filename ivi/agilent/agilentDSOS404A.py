@@ -26,18 +26,18 @@ THE SOFTWARE.
 
 from .agilentBaseS import *
 
-class agilentDSOS204A(agilentBaseS):
-    "KeySight InfiniiVision DSOS204A IVI oscilloscope driver"
+class agilentDSOS404A(agilentBaseS):
+    "KeySight InfiniiVision DSOS404A IVI oscilloscope driver"
     
     def __init__(self, *args, **kwargs):
-        self.__dict__.setdefault('_instrument_id', 'DSOS204A')
+        self.__dict__.setdefault('_instrument_id', 'DSOS404A')
         
-        super(agilentDSOS204A, self).__init__(*args, **kwargs)
+        super(agilentDSOS404A, self).__init__(*args, **kwargs)
         
         self._analog_channel_count = 4
         self._digital_channel_count = 0
         self._channel_count = self._analog_channel_count + self._digital_channel_count
-        self._bandwidth = 2e9
+        self._bandwidth = 4e9
         
         self._init_channels()
     

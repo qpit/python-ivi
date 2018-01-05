@@ -74,7 +74,7 @@ MeasurementFunctionMapping = {
         'phase': 'phase',
         'delay': 'delay'}
 
-class agilents(agilentBaseInfiniium):
+class agilentBaseS(agilentBaseInfiniium):
     "Agilent Infiniium S series IVI oscilloscope driver"
     
     def __init__(self, *args, **kwargs):
