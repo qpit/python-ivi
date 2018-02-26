@@ -33,6 +33,9 @@ from .. import ivi
 from .. import fgen
 
 
+# mapping from AWG return values to IVI specification
+SampleClockSourceMap = {'int': 'internal', 'ext': 'external'}
+
 class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
                 fgen.ArbSeq, fgen.SoftwareTrigger, fgen.Burst,
                 fgen.ArbChannelWfm):
@@ -56,7 +59,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         self._arbitrary_sequence_length_max = 0
         self._arbitrary_sequence_length_min = 0
         
-        self._catalog_names = list()
+        self._wfm_catalog = list()
         
         self._arbitrary_waveform_n = 0
         self._arbitrary_sequence_n = 0
@@ -75,7 +78,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         self._init_outputs()
     
     def _initialize(self, resource = None, id_query = False, reset = False, **keywargs):
-        "Opens an I/O session to the instrument."
+        """Opens an I/O session to the instrument."""
         
         super(tektronixAWG5000, self)._initialize(resource, id_query, reset, **keywargs)
         
@@ -94,6 +97,25 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         # reset
         if reset:
             self.utility_reset()
+
+    def _ask(self, data, num=-1, encoding = 'utf-8'):
+        try:
+            result = super(tektronixAWG5000, self)._ask(data, num, encoding)
+            return result
+        except:
+            self._check_last_error()
+
+    def _write(self, data, encoding = 'utf-8'):
+        try:
+            super(tektronixAWG5000, self)._write(data, encoding)
+        finally:
+            self._check_last_error()
+
+    def _write_ieee_block(self, data, prefix = None, encoding = 'utf-8'):
+        try:
+            super(tektronixAWG5000, self)._write_ieee_block(data, prefix, encoding)
+        finally:
+            self._check_last_error()
 
     def _load_id_string(self):
         if self._driver_operation_simulate:
@@ -168,18 +190,32 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
     
     def _utility_unlock_object(self):
         pass
+
+    def _check_last_error(self):
+        """
+        Retrieves the last error code from instrument. If an error occurred raise an IviException.
+        """
+        result = self._ask(':system:error?')
+        if result is None:
+            return result
+        result = result.split(',')
+        code = int(result[0])
+        if code != 0:
+            message = result[1][1:-1]
+            raise ivi.IviException(message)
     
-    def _load_catalog(self):
-        self._catalog = list()
-        self._catalog_names = list()
+    def _load_wfm_catalog(self):
+        """
+        Loads all existing waveform names from instrument and saves list as self._wfm_catalog.
+
+        Predefined waveforms have a name starting with *.
+        """
+        self._wfm_catalog = list()
         if not self._driver_operation_simulate:
-            raw = self._ask(":memory:catalog:all?").lower()
-            raw = raw.split(' ', 1)[1]
-            
-            l = raw.split(',')
-            l = [s.strip('"') for s in l]
-            self._catalog = [l[i:i+3] for i in range(0, len(l), 3)]
-            self._catalog_names = [l[0] for l in self._catalog]
+            wfm_list_length = int(self._ask("wlist:size?"))
+            for ii in range(wfm_list_length):
+                name = self._ask('wlist:name? {0:d}'.format(ii))
+                self._wfm_catalog.append(name[1:-1])
 
     # ************************ BASE ****************************************************************
 
@@ -206,7 +242,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
     def _get_output_enabled(self, index):
         index = ivi.get_index(self._output_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
-            resp = self._ask(":output%d:state?" % (index+1)).split(' ', 1)[1]
+            resp = self._ask(":output%d:state?" % (index+1))
             self._output_enabled[index] = bool(int(resp))
             self._set_cache_valid(index=index)
         return self._output_enabled[index]
@@ -232,7 +268,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
     def _get_output_mode(self, index):
         index = ivi.get_index(self._output_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
-            resp = self._ask(":awgcontrol:rmode?").split(' ', 1)[1]
+            resp = self._ask(":awgcontrol:rmode?")
             if resp.lower() == 'seq':
                 self._output_mode[index] = 'sequence'
             else:
@@ -260,9 +296,9 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
     def _get_output_reference_clock_source(self, index):
         index = ivi.get_index(self._output_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
-            resp = self._ask(":source1:roscillator:source?").split(' ', 1)[1]
+            resp = self._ask(":source1:roscillator:source?")
             value = resp.lower()
-            self._output_reference_clock_source[index] = value
+            self._output_reference_clock_source[index] = SampleClockSourceMap[value]
             self._set_cache_valid(index=index)
         return self._output_reference_clock_source[index]
     
@@ -281,14 +317,14 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         self._write(":awgcontrol:stop:immediate")
     
     def initiate_generation(self):
-        self._write(":awgcontrol:run")
+        self._write(":awgcontrol:run:immediate")
 
     # ************************ Extension: ArbWfm ***************************************************
     
     def _get_output_arbitrary_gain(self, index):
         index = ivi.get_index(self._output_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
-            resp = self._ask(":source%d:voltage:amplitude?" % (index+1)).split(' ', 1)[1]
+            resp = self._ask(":source%d:voltage:amplitude?" % (index+1))
             self._output_arbitrary_gain[index] = float(resp)
             self._set_cache_valid(index=index)
         return self._output_arbitrary_gain[index]
@@ -304,7 +340,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
     def _get_output_arbitrary_offset(self, index):
         index = ivi.get_index(self._output_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
-            resp = self._ask(":source%d:voltage:offset?" % (index+1)).split(' ', 1)[1]
+            resp = self._ask(":source%d:voltage:offset?" % (index+1))
             self._output_arbitrary_offset[index] = float(resp)
             self._set_cache_valid(index=index)
         return self._output_arbitrary_offset[index]
@@ -320,7 +356,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
     def _get_output_arbitrary_waveform(self, index):
         index = ivi.get_index(self._output_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
-            resp = self._ask(":source%d:waveform?" % (index+1)).split(' ', 1)[1]
+            resp = self._ask(":source%d:waveform?" % (index+1))
             self._output_arbitrary_waveform[index] = resp.strip('"').lower()
             self._set_cache_valid(index=index)
         return self._output_arbitrary_waveform[index]
@@ -333,8 +369,8 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         if ext != 'wfm':
             raise ivi.ValueNotSupportedException()
         # waveform must exist on arb
-        self._load_catalog()
-        if value not in self._catalog_names:
+        self._load_wfm_catalog()
+        if value not in self._wfm_catalog:
             raise ivi.ValueNotSupportedException()
         if not self._driver_operation_simulate:
             self._write(":source%d:waveform \"%s\"" % (index+1, value))
@@ -342,7 +378,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
     
     def _get_arbitrary_sample_rate(self):
         if not self._driver_operation_simulate and not self._get_cache_valid():
-            resp = self._ask(":source1:frequency?").split(' ', 1)[1]
+            resp = self._ask(":source1:frequency?")
             self._arbitrary_sample_rate = float(resp)
             self._set_cache_valid()
         return self._arbitrary_sample_rate
@@ -367,72 +403,71 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         return self._arbitrary_waveform_quantum
     
     def _arbitrary_waveform_clear(self, handle):
-        #TODO
-        # check if handle is in catalog
+        # reload existing waveforms
+        self._load_wfm_catalog()
+        # check if handle exists in wfm catalog
+        if not handle in self._wfm_catalog:
+            raise ivi.InvalidOptionValueException('Handle {0} does not exists.'.format(handle))
         # delete waveform
         self._write(":wlist:waveform:delete \"%s\"" % handle)
-        # check whether state of AWG has changed
+        # if waveform was in use the generation was stopped
     
     def _arbitrary_waveform_create(self, data):
         y = None
         x = None
+        dtype = 'real'
         if type(data) == list and type(data[0]) == float:
             # list
             y = array(data)
         elif type(data) == ndarray and len(data.shape) == 1:
             # 1D array
             y = data
+            if issubdtype(data.dtype, integer):
+                dtype = 'int'
         elif type(data) == ndarray and len(data.shape) == 2 and data.shape[0] == 1:
-            # 2D array, hieght 1
+            # 2D array, height 1
             y = data[0]
+            if issubdtype(data.dtype, integer):
+                dtype = 'int'
         elif type(data) == ndarray and len(data.shape) == 2 and data.shape[1] == 1:
             # 2D array, width 1
             y = data[:,0]
+            if issubdtype(data.dtype, integer):
+                dtype = 'int'
         else:
             x, y = ivi.get_sig(data)
-        
-        if x is None:
-            x = arange(0,len(y)) / 10e6
         
         if len(y) % self._arbitrary_waveform_quantum != 0:
             raise ivi.ValueNotSupportedException()
         
-        xincr = ivi.rms(diff(x))
-        
         # get unused handle
-        self._load_catalog()
+        self._load_wfm_catalog()
         have_handle = False
         while not have_handle:
             self._arbitrary_waveform_n += 1
-            handle = "w%04d.wfm" % self._arbitrary_waveform_n
-            have_handle = handle not in self._catalog_names
-        self._write(":data:destination \"%s\"" % handle)
-        self._write(":wfmpre:bit_nr 12")
-        self._write(":wfmpre:bn_fmt rp")
-        self._write(":wfmpre:byt_nr 2")
-        self._write(":wfmpre:byt_or msb")
-        self._write(":wfmpre:encdg bin")
-        self._write(":wfmpre:pt_fmt y")
-        self._write(":wfmpre:yzero 0")
-        self._write(":wfmpre:ymult %e" % (2/(1<<12)))
-        self._write(":wfmpre:xincr %e" % xincr)
-        
+            handle = "wfm%04d" % self._arbitrary_waveform_n
+            have_handle = handle not in self._wfm_catalog
+
+        # create waveform
+        self._write(':wlist:waveform:new "{0:s}",{1:d},{2:s}'.format(handle, len(y), dtype))
+
+        # transfer data to waveform
         raw_data = b''
-        
-        for f in y:
-            # clip at -1 and 1
-            if f > 1.0: f = 1.0
-            if f < -1.0: f = -1.0
-            
-            f = (f + 1) / 2
-            
-            # scale to 12 bits
-            i = int(f * ((1 << 12) - 2) + 0.5) & 0x000fffff
-            
-            # add to raw data, MSB first
-            raw_data = raw_data + struct.pack('>H', i)
-        
-        self._write_ieee_block(raw_data, ':curve ')
+        if dtype == 'real':
+            for f in y:
+                # clip at -1 and 1
+                if f > 1.0: f = 1.0
+                if f < -1.0: f = -1.0
+                # add to raw data, LSB first
+                raw_data = raw_data + struct.pack('<f', f)
+                # add an empty marker byte
+                raw_data = raw_data + b'\x00'
+        else:
+            for f in y:
+                # add to raw data, LSB first
+                raw_data = raw_data + struct.data('<h', f) # FIXME signed or unsigned, this is here the question
+
+        self._write_ieee_block(raw_data, ':wlist:waveform:data "{0:s}",{1:d},{2:d},'.format(handle, 0, len(y)))
         
         return handle
 
