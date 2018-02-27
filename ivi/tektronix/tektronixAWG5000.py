@@ -37,11 +37,12 @@ from .. import fgen
 SampleClockSourceMap = {'int': 'internal', 'ext': 'external'}
 TriggerSlopeMap = {'pos': 'positive', 'neg': 'negative'}
 TriggerSourceMap = {'int': 'internal', 'ext': 'external'}
+TriggerSource = ('internal', 'external')
 
 
 class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
-                fgen.ArbSeq, fgen.StartTrigger, fgen.SoftwareTrigger, fgen.Burst,
-                fgen.ArbChannelWfm):
+                fgen.ArbSeq, fgen.StartTrigger, fgen.InternalTrigger, fgen.SoftwareTrigger,
+                fgen.ArbChannelWfm, fgen.ArbWfmBinary, fgen.DataMarker):
     """Tektronix AWG5000 series arbitrary waveform generator driver"""
     
     def __init__(self, *args, **kwargs):
@@ -54,18 +55,23 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         self._arbitrary_sample_rate = 0
         self._arbitrary_waveform_number_waveforms_max = 16200
         self._arbitrary_waveform_size_max = 256*1024
-        self._arbitrary_waveform_size_min = 64
-        self._arbitrary_waveform_quantum = 8
+        self._arbitrary_waveform_size_min = 1
+        self._arbitrary_waveform_quantum = 1
         
         self._arbitrary_sequence_number_sequences_max = 0
-        self._arbitrary_sequence_loop_count_max = 0
-        self._arbitrary_sequence_length_max = 0
-        self._arbitrary_sequence_length_min = 0
+        self._arbitrary_sequence_loop_count_max = 65536
+        self._arbitrary_sequence_length_max = 8000
+        self._arbitrary_sequence_length_min = 1
         
         self._wfm_catalog = list()
         
         self._arbitrary_waveform_n = 0
         self._arbitrary_sequence_n = 0
+
+        self._arbitrary_binary_alignment = 'right'
+        self._arbitrary_sample_bit_resolution = 14
+
+        self._data_marker_count = 2*self._output_count # 2 per channel
         
         self._identity_description = "Tektronix AWG5000 series arbitrary waveform generator driver"
         self._identity_identifier = ""
@@ -79,10 +85,11 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         self._identity_supported_instrument_models = ['AWG5002a','AWG5002c'] # FIXME
         
         self._init_outputs()
+        self._init_data_markers()
+        self._data_marker_source_channel = [val for val in self._output_name for __ in (0, 1)]
     
     def _initialize(self, resource = None, id_query = False, reset = False, **keywargs):
         """Opens an I/O session to the instrument."""
-        
         super(tektronixAWG5000, self)._initialize(resource, id_query, reset, **keywargs)
         
         # interface clear
@@ -105,7 +112,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         try:
             result = super(tektronixAWG5000, self)._ask(data, num, encoding)
             return result
-        except:
+        finally:
             self._check_last_error()
 
     def _write(self, data, encoding = 'utf-8'):
@@ -198,7 +205,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         """
         Retrieves the last error code from instrument. If an error occurred raise an IviException.
         """
-        result = self._ask(':system:error?')
+        result = super(tektronixAWG5000, self)._ask(':system:error?')
         if result is None:
             return result
         result = result.split(',')
@@ -367,10 +374,6 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
     def _set_output_arbitrary_waveform(self, index, value):
         index = ivi.get_index(self._output_name, index)
         value = str(value).lower()
-        # extension must be wfm
-        ext = value.split('.').pop()
-        if ext != 'wfm':
-            raise ivi.ValueNotSupportedException()
         # waveform must exist on arb
         self._load_wfm_catalog()
         if value not in self._wfm_catalog:
@@ -417,26 +420,42 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
     
     def _arbitrary_waveform_create(self, data):
         y = None
-        x = None
-        dtype = 'real'
+        marker1 = None
+        marker2 = None
+        data_type = 'real'
         if type(data) == list and type(data[0]) == float:
             # list
             y = array(data)
-        elif type(data) == ndarray and len(data.shape) == 1:
-            # 1D array
-            y = data
+        elif type(data) == ndarray:
             if issubdtype(data.dtype, integer):
-                dtype = 'int'
-        elif type(data) == ndarray and len(data.shape) == 2 and data.shape[0] == 1:
-            # 2D array, height 1
-            y = data[0]
-            if issubdtype(data.dtype, integer):
-                dtype = 'int'
-        elif type(data) == ndarray and len(data.shape) == 2 and data.shape[1] == 1:
-            # 2D array, width 1
-            y = data[:,0]
-            if issubdtype(data.dtype, integer):
-                dtype = 'int'
+                data_type = 'int'
+            if len(data.shape) == 1:
+                # 1D array
+                y = data
+            elif len(data.shape) == 2 and data.shape[0] == 1:
+                # 2D array, height 1
+                y = data[0]
+            elif len(data.shape) == 2 and data.shape[1] == 1:
+                # 2D array, width 1
+                y = data[:,0]
+            elif len(data.shape) == 2 and data.shape[0] == 2:
+                # 2d array, height 2, 1 marker channel
+                y = data[0,:]
+                marker1 = data[1,:]
+            elif len(data.shape) == 2 and data.shape[1] == 2:
+                # 2d array, width 2, 1 marker channel
+                y = data[:,0]
+                marker1 = data[:,1]
+            elif len(data.shape) == 3 and data.shape[0] == 3:
+                # 2d array, height 3, 2 marker channels
+                y = data[0,:]
+                marker1 = data[1,:]
+                marker2 = data[2,:]
+            elif len(data.shape) == 3 and data.shape[1] == 3:
+                # 2d array, width 3, 2 marker channels
+                y = data[:,0]
+                marker1 = data[:,1]
+                marker2 = data[:,2]
         else:
             x, y = ivi.get_sig(data)
         
@@ -452,23 +471,30 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
             have_handle = handle not in self._wfm_catalog
 
         # create waveform
-        self._write(':wlist:waveform:new "{0:s}",{1:d},{2:s}'.format(handle, len(y), dtype))
+        self._write(':wlist:waveform:new "{0:s}",{1:d},{2:s}'.format(handle, len(y), data_type))
 
         # transfer data to waveform
         raw_data = b''
-        if dtype == 'real':
-            for f in y:
+        if data_type == 'real':
+            for ii in range(len(y)):
+                f = y[ii]
                 # clip at -1 and 1
                 if f > 1.0: f = 1.0
                 if f < -1.0: f = -1.0
                 # add to raw data, LSB first
                 raw_data = raw_data + struct.pack('<f', f)
                 # add an empty marker byte
-                raw_data = raw_data + b'\x00'
+                marker = 0
+                if (marker1 is not None):
+                    marker = (bool(marker1[ii]) << 7)
+                if (marker2 is not None):
+                    marker = marker & (bool(marker2[ii]) << 6)
+                raw_data = raw_data + marker.to_bytes(1, 'little')
         else:
             for f in y:
-                # add to raw data, LSB first
-                raw_data = raw_data + struct.data('<h', f) # FIXME signed or unsigned, this is here the question
+                # add to raw data, LSB first, signed 16 bit integer
+                # TODO: signed???, embed markers
+                raw_data = raw_data + struct.data('<h', f)
 
         # fixme: maybe better to split into chunks to be able to stop transmission?
         self._write_ieee_block(raw_data, ':wlist:waveform:data "{0:s}",{1:d},{2:d},'.format(
@@ -524,7 +550,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
 
     def _set_output_start_trigger_slope(self, index, value):
         index = ivi.get_index(self._output_name, index)
-        if value not in TriggerSlope:
+        if value not in fgen.TriggerSlope:
             raise ivi.ValueNotSupportedException()
         if value == 'either':
             raise ivi.ValueNotSupportedException()
@@ -567,27 +593,124 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         self._set_cache_valid(index=index)
 
     def _start_trigger_send_software_trigger(self):
-        self._write('*TRG')
+        if not self._driver_operation_simulate:
+            self._write('*TRG')
 
-    # ************************ Extension:  ***************************************************
+    # ************************ Extension: InternalTrigger ******************************************
+
+    def _get_internal_trigger_rate(self):
+        if not self._driver_operation_simulate and not self._get_cache_valid():
+            resp = float(self._ask(':trigger:timer?'))
+            self._internal_trigger_rate = resp
+            self._set_cache_valid()
+        return self._internal_trigger_rate
+
+    def _set_internal_trigger_rate(self, value):
+        self._write(':trigger:timer {0}'.format(value))
+        self._internal_trigger_rate = value
+        self._set_cache_valid(True, '_internal_trigger_rate')
+
+    # ************************ Extension: SoftwareTrigger ******************************************
 
     def send_software_trigger(self):
         if not self._driver_operation_simulate:
             self._write("*TRG")
-    
-    def _get_output_burst_count(self, index):
-        index = ivi.get_index(self._output_name, index)
-        return self._output_burst_count[index]
-    
-    def _set_output_burst_count(self, index, value):
-        index = ivi.get_index(self._output_name, index)
-        value = int(value)
-        self._output_burst_count[index] = value
-    
+
+    # ************************ Extension: ArbChannelWfm ********************************************
+
     def _arbitrary_waveform_create_channel_waveform(self, index, data):
         handle = self._arbitrary_waveform_create(data)
         self._set_output_arbitrary_waveform(index, handle)
         return handle
-    
-    
 
+    # ************************ Extension: ArbWfmBinary *********************************************
+
+    def _arbitrary_waveform_create_channel_waveform_int16(self, index, data):
+        index = ivi.get_index(self._output_name, index)
+        handle = self._arbitrary_waveform_create(data)
+        self._set_output_arbitrary_waveform(index, handle)
+        return handle
+
+    def _arbitrary_waveform_create_channel_waveform_int32(self, index, data):
+        index = ivi.get_index(self._output_name, index)
+        handle = self._arbitrary_waveform_create(data)
+        self._set_output_arbitrary_waveform(index, handle)
+        return handle
+
+    # ************************ Extension: DataMarker ***********************************************
+
+    def _get_data_marker_amplitude(self, index):
+        index = ivi.get_index(self._data_marker_name, index)
+        source_index = int(floor(index / 2))
+        if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
+            resp = float(self._ask(':source{0}:marker{1}:voltage:amplitude?'.format(source_index+1,
+                                                                                    index%2+1)))
+            self._data_marker_amplitude[index] = resp
+            self._set_cache_valid(index=index)
+        return self._data_marker_amplitude[index]
+
+    def _set_data_marker_amplitude(self, index, value):
+        index = ivi.get_index(self._data_marker_name, index)
+        source_index = int(floor(index / 2))
+        value = float(value)
+        self._write(':source{0}:marker{1}:voltage:amplitude {2}'.format(source_index + 1,
+                                                                        index % 2 + 1,
+                                                                        value))
+        self._data_marker_amplitude[index] = value
+        self._set_cache_valid(index=index)
+
+    def _get_data_marker_bit_position(self, index):
+        # bit position is not supported by instrument
+        index = ivi.get_index(self._data_marker_name, index)
+        # the two most significant bits are for data markers. Two markers per channel, one is the
+        # highest significant bit, one if the second highest
+        return (index % 2 + 1) << 6
+
+    def _set_data_marker_bit_position(self, index, value):
+        # setting bit position is not supported by instrument
+        pass
+
+    def _get_data_marker_delay(self, index):
+        index = ivi.get_index(self._data_marker_name, index)
+        source_index = int(floor(index / 2))
+        if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
+            resp = float(self._ask(':source{0}:marker{1}:delay?'.format(source_index + 1,
+                                                                        index % 2 + 1)))
+            self._data_marker_delay[index] = resp
+            self._set_cache_valid(index=index)
+        return self._data_marker_delay[index]
+
+    def _set_data_marker_delay(self, index, value):
+        index = ivi.get_index(self._data_marker_amplitude, index)
+        source_index = int(floor(index / 2))
+        value = float(value)
+        self._write(':source{0}:marker{1}:delay {2:e}'.format(source_index + 1,
+                                                              index % 2 + 1,
+                                                              value))
+        self._data_marker_delay[index] = value
+        self._set_cache_valid(index=index)
+
+    def _get_data_marker_destination(self, index):
+        index = ivi.get_index(self._data_marker_name, index)
+        return self._data_marker_destination[index]
+
+    def _set_data_marker_destination(self, index, value):
+        index = ivi.get_index(self._data_marker_name, index)
+        value = str(value)
+        self._data_marker_destination[index] = value
+
+    def _get_data_marker_polarity(self, index):
+        # fixed value
+        return 'active_high'
+
+    def _set_data_marker_polarity(self, index, value):
+        # changing polarity is not supported by the instrument.
+        if value not in MarkerPolarity:
+            raise ivi.ValueNotSupportedException()
+
+    def _get_data_marker_source_channel(self, index):
+        index = ivi.get_index(self._data_marker_name, index)
+        return self._data_marker_source_channel[index]
+
+    def _set_data_marker_source_channel(self, index, value):
+        pass
