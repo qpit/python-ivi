@@ -35,9 +35,12 @@ from .. import fgen
 
 # mapping from AWG return values to IVI specification
 SampleClockSourceMap = {'int': 'internal', 'ext': 'external'}
+TriggerSlopeMap = {'pos': 'positive', 'neg': 'negative'}
+TriggerSourceMap = {'int': 'internal', 'ext': 'external'}
+
 
 class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
-                fgen.ArbSeq, fgen.SoftwareTrigger, fgen.Burst,
+                fgen.ArbSeq, fgen.StartTrigger, fgen.SoftwareTrigger, fgen.Burst,
                 fgen.ArbChannelWfm):
     """Tektronix AWG5000 series arbitrary waveform generator driver"""
     
@@ -467,11 +470,13 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
                 # add to raw data, LSB first
                 raw_data = raw_data + struct.data('<h', f) # FIXME signed or unsigned, this is here the question
 
-        self._write_ieee_block(raw_data, ':wlist:waveform:data "{0:s}",{1:d},{2:d},'.format(handle, 0, len(y)))
+        # fixme: maybe better to split into chunks to be able to stop transmission?
+        self._write_ieee_block(raw_data, ':wlist:waveform:data "{0:s}",{1:d},{2:d},'.format(
+            handle, 0, len(y)))
         
         return handle
 
-    # ************************ Extension: ???? ***************************************************
+    # ************************ Extension: ArbSeq ***************************************************
     
     def _get_arbitrary_sequence_number_sequences_max(self):
         return self._arbitrary_sequence_number_sequences_max
@@ -496,7 +501,76 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
     
     def _arbitrary_sequence_create(self, handle_list, loop_count_list):
         return "handle"
-    
+
+    # ************************ Extension: StartTrigger *********************************************
+
+    def _get_output_start_trigger_delay(self, index):
+        # trigger delay is not supported by instrument
+        return 0
+
+    def _set_output_start_trigger_delay(self, index, value):
+        # setting trigger delay is not supported
+        pass
+
+    def _get_output_start_trigger_slope(self, index):
+        # for the instrument only one global trigger exists
+        index = ivi.get_index(self._output_name, index)
+        if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
+            resp = self._ask(':trigger:slope?').lower()
+            resp = TriggerSlopeMap[resp]
+            self._output_start_trigger_slope = [resp for ii in range(self._output_count)]
+            self._set_cache_valid(index=index)
+        return self._output_start_trigger_slope[index]
+
+    def _set_output_start_trigger_slope(self, index, value):
+        index = ivi.get_index(self._output_name, index)
+        if value not in TriggerSlope:
+            raise ivi.ValueNotSupportedException()
+        if value == 'either':
+            raise ivi.ValueNotSupportedException()
+        self._write(':trigger:slope {0}'.format(value))
+        self._output_start_trigger_slope = [value for ii in range(self._output_count)]
+        self._set_cache_valid(index=index)
+
+    def _get_output_start_trigger_source(self, index):
+        index = ivi.get_index(self._output_name, index)
+        if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
+            resp = self._ask(':trigger:source?').lower()
+            resp = TriggerSourceMap[resp]
+            self._output_start_trigger_source = [resp for ii in range(self._output_count)]
+            self._set_cache_valid(index=index)
+        return self._output_start_trigger_source[index]
+
+    def _set_output_start_trigger_source(self, index, value):
+        index = ivi.get_index(self._output_name, index)
+        if value is None:
+            value = 'internal'
+        if value not in TriggerSource:
+            raise ivi.ValueNotSupportedException()
+        self._write(':trigger:source {0}'.format(value))
+        self._output_start_trigger_source = [value for ii in range(self._output_count)]
+        self._set_cache_valid(index=index)
+
+    def _get_output_start_trigger_threshold(self, index):
+        # for the instrument only one global trigger exists
+        index = ivi.get_index(self._output_name, index)
+        if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
+            resp = float(self._ask(':trigger:level?'))
+            self._output_start_trigger_threshold = [resp for ii in range(self._output_count)]
+            self._set_cache_valid(index=index)
+        return self._output_start_trigger_threshold[index]
+
+    def _set_output_start_trigger_threshold(self, index, value):
+        index = ivi.get_index(self._output_name, index)
+        self._write(':trigger:level {0}V'.format(value))
+        self._output_start_trigger_threshold = [value for ii in range(self._output_count)]
+        self._set_cache_valid(index=index)
+
+    def _start_trigger_send_software_trigger(self):
+        self._write('*TRG')
+
+    # ************************ Extension:  ***************************************************
+
     def send_software_trigger(self):
         if not self._driver_operation_simulate:
             self._write("*TRG")
