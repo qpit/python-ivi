@@ -76,7 +76,7 @@ MeasurementFunctionMapping = {
 
 class agilentBaseS(agilentBaseInfiniium):
     "Agilent Infiniium S series IVI oscilloscope driver"
-    
+
     def __init__(self, *args, **kwargs):
         self.__dict__.setdefault('_instrument_id', '')
         self._analog_channel_name = list()
@@ -91,25 +91,25 @@ class agilentBaseS(agilentBaseInfiniium):
         self._channel_display_offset = list()
         self._channel_display_range = list()
         self._channel_display_scale = list()
-        
-        super(agilents, self).__init__(*args, **kwargs)
-        
+
+        super(agilentBaseS, self).__init__(*args, **kwargs)
+
         self._analog_channel_name = list()
         self._analog_channel_count = 4
         self._digital_channel_name = list()
         self._digital_channel_count = 16
         self._channel_count = self._analog_channel_count + self._digital_channel_count
         self._bandwidth = 0.5e9
-        
+
         self._horizontal_divisions = 10
         self._vertical_divisions = 8
-        
+
         self._display_color_grade = False
-        
+
         self._identity_description = "KeySight Infiniium S series IVI oscilloscope driver"
         self._identity_supported_instrument_models = ['DSOS054A','DSOS104A','DSOS204A','DSOS254A','DSOS404A','DSOS604A',
         'DSOS804A','MSOS054A','MSOS104A','MSOS204A','MSOS254A','MSOS404A','MSOS604A','MSOS804A']
-        
+
         self._add_property('channels[].common_mode',
                         self._get_channel_common_mode,
                         self._set_channel_common_mode,
@@ -141,7 +141,7 @@ class agilentBaseS(agilentBaseInfiniium):
                         None,
                         ivi.Doc("""
                         Sets the differential and common mode display scale and offset to track
-                        the acquisition scale and offset.  
+                        the acquisition scale and offset.
                         """))
         self._add_property('channels[].display_offset',
                         self._get_channel_display_offset,
@@ -149,7 +149,7 @@ class agilentBaseS(agilentBaseInfiniium):
                         None,
                         ivi.Doc("""
                         Sets the displayed offset of the selected channel.  Setting this parameter
-                        disables display_auto.  Units are volts.  
+                        disables display_auto.  Units are volts.
                         """))
         self._add_property('channels[].display_range',
                         self._get_channel_display_range,
@@ -157,7 +157,7 @@ class agilentBaseS(agilentBaseInfiniium):
                         None,
                         ivi.Doc("""
                         Sets the full scale vertical range of the selected channel.  Setting this
-                        parameter disables display_auto.  Units are volts.  
+                        parameter disables display_auto.  Units are volts.
                         """))
         self._add_property('channels[].display_scale',
                         self._get_channel_display_scale,
@@ -165,12 +165,12 @@ class agilentBaseS(agilentBaseInfiniium):
                         None,
                         ivi.Doc("""
                         Sets the displayed scale of the selected channel per division.  Setting
-                        this parameter disables display_auto.  Units are volts.  
+                        this parameter disables display_auto.  Units are volts.
                         """))
-        
+
         self._init_channels()
-        
-    
+
+
     def _utility_error_query(self):
         error_code = 0
         error_message = "No error"
@@ -180,13 +180,13 @@ class agilentBaseS(agilentBaseInfiniium):
             if error_code != 0:
                 error_message = "Unknown"
         return (error_code, error_message)
-    
+
     def _init_channels(self):
         try:
-            super(agilents, self)._init_channels()
+            super(agilentBaseS, self)._init_channels()
         except AttributeError:
             pass
-        
+
         self._channel_common_mode = list()
         self._channel_differential = list()
         self._channel_differential_skew = list()
@@ -194,7 +194,7 @@ class agilentBaseS(agilentBaseInfiniium):
         self._channel_display_offset = list()
         self._channel_display_range = list()
         self._channel_display_scale = list()
-        
+
         for i in range(self._analog_channel_count):
             self._channel_common_mode.append(False)
             self._channel_differential.append(False)
@@ -203,19 +203,19 @@ class agilentBaseS(agilentBaseInfiniium):
             self._channel_display_offset.append(0.0)
             self._channel_display_range.append(1.0)
             self._channel_display_scale.append(0.1)
-    
-    
+
+
     def _display_fetch_screenshot(self, format='png', invert=False):
         if self._driver_operation_simulate:
             return b''
-        
+
         if format not in ScreenshotImageFormatMapping:
             raise ivi.ValueNotSupportedException()
-        
+
         format = ScreenshotImageFormatMapping[format]
-        
+
         self._write(":display:data? %s, screen, on, %s" % (format, 'invert' if invert else 'normal'))
-        
+
         return self._read_ieee_block()
 
     def _get_channel_input_impedance(self, index):
@@ -286,7 +286,7 @@ class agilentBaseS(agilentBaseInfiniium):
             self._channel_common_mode[index] = bool(int(self._ask(":%s:commonmode?" % self._channel_name[index])))
             self._set_cache_valid(index=index)
         return self._channel_common_mode[index]
-    
+
     def _set_channel_common_mode(self, index, value):
         index = ivi.get_index(self._analog_channel_name, index)
         value = bool(value)
@@ -294,14 +294,14 @@ class agilentBaseS(agilentBaseInfiniium):
             self._write(":%s:commonmode %d" % (self._channel_name[index], int(value)))
         self._channel_common_mode[index] = value
         self._set_cache_valid(index=index)
-    
+
     def _get_channel_differential(self, index):
         index = ivi.get_index(self._analog_channel_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
             self._channel_differential[index] = bool(int(self._ask(":%s:differential?" % self._channel_name[index])))
             self._set_cache_valid(index=index)
         return self._channel_differential[index]
-    
+
     def _set_channel_differential(self, index, value):
         index = ivi.get_index(self._analog_channel_name, index)
         value = bool(value)
@@ -309,14 +309,14 @@ class agilentBaseS(agilentBaseInfiniium):
             self._write(":%s:differential %d" % (self._channel_name[index], int(value)))
         self._channel_differential[index] = value
         self._set_cache_valid(index=index)
-    
+
     def _get_channel_differential_skew(self, index):
         index = ivi.get_index(self._analog_channel_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
             self._channel_differential_skew[index] = float(self._ask(":%s:differential:skew?" % self._channel_name[index]))
             self._set_cache_valid(index=index)
         return self._channel_differential_skew[index]
-    
+
     def _set_channel_differential_skew(self, index, value):
         index = ivi.get_index(self._analog_channel_name, index)
         value = float(value)
@@ -324,14 +324,14 @@ class agilentBaseS(agilentBaseInfiniium):
             self._write(":%s:differential:skew %e" % (self._channel_name[index], value))
         self._channel_differential_skew[index] = value
         self._set_cache_valid(index=index)
-    
+
     def _get_channel_display_auto(self, index):
         index = ivi.get_index(self._analog_channel_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
             self._channel_display_auto[index] = bool(int(self._ask(":%s:display:auto?" % self._channel_name[index])))
             self._set_cache_valid(index=index)
         return self._channel_display_auto[index]
-    
+
     def _set_channel_display_auto(self, index, value):
         index = ivi.get_index(self._analog_channel_name, index)
         value = bool(value)
@@ -339,14 +339,14 @@ class agilentBaseS(agilentBaseInfiniium):
             self._write(":%s:display:auto %d" % (self._channel_name[index], int(value)))
         self._channel_display_auto[index] = value
         self._set_cache_valid(index=index)
-    
+
     def _get_channel_display_offset(self, index):
         index = ivi.get_index(self._analog_channel_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
             self._channel_display_offset[index] = float(self._ask(":%s:display:offset?" % self._channel_name[index]))
             self._set_cache_valid(index=index)
         return self._channel_display_offset[index]
-    
+
     def _set_channel_display_offset(self, index, value):
         index = ivi.get_index(self._analog_channel_name, index)
         value = float(value)
@@ -354,14 +354,14 @@ class agilentBaseS(agilentBaseInfiniium):
             self._write(":%s:display:offset %e" % (self._channel_name[index], value))
         self._channel_display_offset[index] = value
         self._set_cache_valid(index=index)
-    
+
     def _get_channel_display_range(self, index):
         index = ivi.get_index(self._analog_channel_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
             self._channel_display_range[index] = float(self._ask(":%s:display:range?" % self._channel_name[index]))
             self._set_cache_valid(index=index)
         return self._channel_display_range[index]
-    
+
     def _set_channel_display_range(self, index, value):
         index = ivi.get_index(self._analog_channel_name, index)
         value = float(value)
@@ -369,14 +369,14 @@ class agilentBaseS(agilentBaseInfiniium):
             self._write(":%s:display:range %e" % (self._channel_name[index], value))
         self._channel_display_range[index] = value
         self._set_cache_valid(index=index)
-    
+
     def _get_channel_display_scale(self, index):
         index = ivi.get_index(self._analog_channel_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
             self._channel_display_scale[index] = float(self._ask(":%s:display:scale?" % self._channel_name[index]))
             self._set_cache_valid(index=index)
         return self._channel_display_scale[index]
-    
+
     def _set_channel_display_scale(self, index, value):
         index = ivi.get_index(self._analog_channel_name, index)
         value = float(value)
@@ -449,7 +449,7 @@ class agilentBaseS(agilentBaseInfiniium):
             self._write(":trigger:%s:source %s" % (TriggerTypeMapping[type], value))
         self._trigger_source = value
         self._set_cache_valid()
-    
+
     def _measurement_fetch_waveform(self, index):
         index = ivi.get_index(self._channel_name, index)
 
@@ -465,9 +465,9 @@ class agilentBaseS(agilentBaseInfiniium):
         self._write(":waveform:source %s" % self._channel_name[index])
 
         trace = ivi.TraceYT()
-        
+
         # Read preamble
-        
+
         pre = self._ask(":waveform:preamble?").split(',')
 
         acq_format = int(pre[0])
@@ -481,13 +481,13 @@ class agilentBaseS(agilentBaseInfiniium):
         trace.y_origin = float(pre[8])
         trace.y_reference = int(float(pre[9]))
         trace.y_hole = 0
-        
+
         if acq_type == 1:
             raise scope.InvalidAcquisitionTypeException()
-        
+
         if acq_format != 2:
-            raise UnexpectedResponseException()
-        
+            raise ivi.UnexpectedResponseException()
+
         self._write(":waveform:data?")
 
         # Read waveform data
@@ -497,10 +497,10 @@ class agilentBaseS(agilentBaseInfiniium):
         trace.y_raw = array.array('h', raw_data[0:points * 2])
 
         return trace
-    
+
     def _measurement_read_waveform(self, index, maximum_time):
         return self._measurement_fetch_waveform(index)
-    
+
     def _measurement_initiate(self):
         if not self._driver_operation_simulate:
             self._write(":acquire:complete 100")
@@ -562,15 +562,15 @@ class agilentBaseS(agilentBaseInfiniium):
     def _set_working_directory(self,value):
         if not self._driver_operation_simulate:
             self._write(":DISK:CDIRECTORY %s" % '\"'+value+'\"')
-    
+
     def _get_pwd(self):
         if not self._driver_operation_simulate:
              return self._ask(":DISK:PWD?")
-    
+
     def _save_waveform(self,filename,source,filtype='BIN',header="ON"):
         if not self._driver_operation_simulate:
             self._write(":DISK:SAVE:WAVEFORM %s" % 'CHANnel'+str(source)+',\"'+filename+'\",'+filtype+','+header)
-    
+
     def _set_save_waveform_all(self):
         if not self._driver_operation_simulate:
             self._write(":DISK:SEGMented ALL")
