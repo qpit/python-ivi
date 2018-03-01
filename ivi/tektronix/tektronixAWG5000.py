@@ -39,6 +39,12 @@ TriggerSlopeMap = {'pos': 'positive', 'neg': 'negative'}
 TriggerSourceMap = {'int': 'internal', 'ext': 'external'}
 TriggerSource = ('internal', 'external')
 
+# status codes
+STATUS_ERROR = -1
+STATUS_STOPPED = 0
+STATUS_WAITING_FOR_TRIGGER = 1
+STATUS_RUNNING = 2
+
 
 class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
                 fgen.ArbSeq, fgen.StartTrigger, fgen.InternalTrigger, fgen.SoftwareTrigger,
@@ -49,12 +55,20 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         self.__dict__.setdefault('_instrument_id', '')
         
         super(tektronixAWG5000, self).__init__(*args, **kwargs)
+
+        self._add_property('status',
+                           self._get_status,
+                           None,
+                           None,
+                           """
+                           Returns the status of the arbitrary waveform generator or the sequencer.
+                           """)
         
         self._output_count = 2
         
         self._arbitrary_sample_rate = 0
         self._arbitrary_waveform_number_waveforms_max = 16200
-        self._arbitrary_waveform_size_max = 256*1024
+        self._arbitrary_waveform_size_max = 16*1024*1024 # 16M samples
         self._arbitrary_waveform_size_min = 1
         self._arbitrary_waveform_quantum = 1
         
@@ -162,19 +176,6 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
     def _utility_disable(self):
         pass
     
-    def _utility_error_query(self):
-        error_code = 0
-        error_message = "No error"
-        if not self._driver_operation_simulate:
-            error_code, error_message = self._ask(":evmsg?").split(',')
-            error_code = int(error_code.split(' ', 1)[1])
-            if error_code == 1:
-                self._ask("*esr?")
-                error_code, error_message = self._ask(":evmsg?").split(',')
-                error_code = int(error_code.split(' ', 1)[1])
-            error_message = error_message.strip(' "')
-        return (error_code, error_message)
-    
     def _utility_lock_object(self):
         pass
     
@@ -226,6 +227,19 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
             for ii in range(wfm_list_length):
                 name = self._ask('wlist:name? {0:d}'.format(ii))
                 self._wfm_catalog.append(name[1:-1])
+
+    # ************************ AWG5000 specific ****************************************************
+
+    def _get_status(self):
+        """
+        Retrieves the status from the AWG.
+
+        -1 indicates that the request of the status for AWG has failed.
+         0 indicates that the instrument has stopped.
+         1 indicates that the instrument is waiting for trigger.
+         2 indicates that the instrument is running.
+        """
+        return int(self._ask('AWGC:RSTate?'))
 
     # ************************ BASE ****************************************************************
 
@@ -323,11 +337,11 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
             self._set_cache_valid(valid=False,index=k)
         self._set_cache_valid(index=index)
     
-    def abort_generation(self):
-        self._write(":awgcontrol:stop:immediate")
+    def _abort_generation(self):
+        self._write("AWGC:STOP")
     
-    def initiate_generation(self):
-        self._write(":awgcontrol:run:immediate")
+    def _initiate_generation(self):
+        self._write("AWGC:RUN")
 
     # ************************ Extension: ArbWfm ***************************************************
     
@@ -476,20 +490,31 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         # transfer data to waveform
         raw_data = b''
         if data_type == 'real':
-            for ii in range(len(y)):
-                f = y[ii]
-                # clip at -1 and 1
-                if f > 1.0: f = 1.0
-                if f < -1.0: f = -1.0
-                # add to raw data, LSB first
-                raw_data = raw_data + struct.pack('<f', f)
-                # add an empty marker byte
-                marker = 0
-                if (marker1 is not None):
-                    marker = (bool(marker1[ii]) << 7)
+            # clip input data and convert to bytes
+            y = y.clip(-1, 1)
+            raw_data = y.astype(float32).tobytes()
+            # if marker are used combine them into the marker byte
+            if (marker1 is not None):
+                marker = left_shift(marker1.astype(bool).astype(uint32), 7)
                 if (marker2 is not None):
-                    marker = marker & (bool(marker2[ii]) << 6)
-                raw_data = raw_data + marker.to_bytes(1, 'little')
+                    marker = bitwise_or(marker, left_shift(marker2.astype(bool).astype(uint32), 6))
+                marker = marker.tobytes()
+            else:
+                marker = bytes(len(y))
+            # combine raw data and marker byte
+            raw_data = b''.join(raw_data[4*ii:4*(ii+1)]+marker[ii:ii+1] for ii in range(len(y)))
+
+            # for ii in range(len(y)):
+            #     f = y[ii]
+            #     # add to raw data, LSB first
+            #     raw_data = raw_data + struct.pack('<f', f)
+            #     # add an marker byte
+            #     marker = 0
+            #     if (marker1 is not None):
+            #         marker = (bool(marker1[ii]) << 7)
+            #     if (marker2 is not None):
+            #         marker = marker & (bool(marker2[ii]) << 6)
+            #     raw_data = raw_data + marker.to_bytes(1, 'little')
         else:
             for f in y:
                 # add to raw data, LSB first, signed 16 bit integer
