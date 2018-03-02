@@ -460,12 +460,12 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
                 # 2d array, width 2, 1 marker channel
                 y = data[:,0]
                 marker1 = data[:,1]
-            elif len(data.shape) == 3 and data.shape[0] == 3:
+            elif len(data.shape) == 2 and data.shape[0] == 3:
                 # 2d array, height 3, 2 marker channels
                 y = data[0,:]
                 marker1 = data[1,:]
                 marker2 = data[2,:]
-            elif len(data.shape) == 3 and data.shape[1] == 3:
+            elif len(data.shape) == 2 and data.shape[1] == 3:
                 # 2d array, width 3, 2 marker channels
                 y = data[:,0]
                 marker1 = data[:,1]
@@ -495,10 +495,10 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
             raw_data = y.astype(float32).tobytes()
             # if marker are used combine them into the marker byte
             if (marker1 is not None):
-                marker = left_shift(marker1.astype(bool).astype(uint32), 7)
+                marker = left_shift(marker1.astype(bool).astype(uint32), 6)
                 if (marker2 is not None):
-                    marker = bitwise_or(marker, left_shift(marker2.astype(bool).astype(uint32), 6))
-                marker = marker.tobytes()
+                    marker = bitwise_or(marker, left_shift(marker2.astype(bool).astype(uint32), 7))
+                marker = marker.astype(uint8).tobytes()
             else:
                 marker = bytes(len(y))
             # combine raw data and marker byte
