@@ -1,5 +1,6 @@
 import time
 import numpy
+import matplotlib.pyplot as plt
 import ivi.tektronix.tektronixAWG5000 as awg5000
 import ivi.agilent.agilentDSOS204A as dsos204a
 
@@ -69,3 +70,8 @@ measured_marker = scope.channels[2].measurement.fetch_waveform()
 # stop awg
 awg.abort_generation()
 awg.arbitrary.waveform.clear(wfm_handle)
+
+# plot measured results
+plt.plot(measured_data.t, measured_data.y)
+plt.plot(measured_marker.t, measured_marker.y)
+plt.show()
