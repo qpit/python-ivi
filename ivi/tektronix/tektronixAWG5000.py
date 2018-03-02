@@ -509,10 +509,10 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
             # embed marker into the two highest significant bits
             if (marker1 is not None):
                 y = bitwise_or(y,
-                               left_shift(marker1.astype(bool).astype(uint32), 7)).astype(uint16)
+                               left_shift(marker1.astype(bool).astype(uint16), 14)).astype(uint16)
             if (marker2 is not None):
                 y = bitwise_or(y,
-                               left_shift(marker2.astype(bool).astype(uint32), 6)).astype(uint16)
+                               left_shift(marker2.astype(bool).astype(uint16), 15)).astype(uint16)
             # convert to bytes
             raw_data = y.tobytes()
 
