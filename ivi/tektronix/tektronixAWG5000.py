@@ -167,7 +167,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         self._load_id_string()
         return self._identity_instrument_model
     
-    def _get_identity_instrument_firmware_revision(self)
+    def _get_identity_instrument_firmware_revision(self):
         if self._get_cache_valid():
             return self._identity_instrument_firmware_revision
         self._load_id_string()
@@ -514,9 +514,21 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
             # convert to bytes
             raw_data = y.tobytes()
 
-        # fixme: maybe better to split into chunks to be able to stop transmission?
-        self._write_ieee_block(raw_data, ':wlist:waveform:data "{0:s}",{1:d},{2:d},'.format(
-            handle, 0, len(y)))
+        # transmit data in chunks
+        chunk_size = min(100000, len(y))
+        start_index = 0
+        if data_type == 'real':
+            raw_data_sample_length = 5
+        else:
+            raw_data_sample_length = 2
+        while chunk_size > 0 and start_index + chunk_size <= len(y):
+            self._write_ieee_block(
+                raw_data[raw_data_sample_length * start_index:
+                         raw_data_sample_length * (start_index + chunk_size)],
+                ':wlist:waveform:data "{0:s}",{1:d},{2:d},'.format(handle, start_index,
+                                                                   chunk_size))
+            start_index = start_index + chunk_size
+            chunk_size = min(100000, len(y) - start_index)
         
         return handle
 
