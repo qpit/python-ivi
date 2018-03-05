@@ -460,12 +460,12 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
                 # 2d array, width 2, 1 marker channel
                 y = data[:,0]
                 marker1 = data[:,1]
-            elif len(data.shape) == 3 and data.shape[0] == 3:
+            elif len(data.shape) == 2 and data.shape[0] == 3:
                 # 2d array, height 3, 2 marker channels
                 y = data[0,:]
                 marker1 = data[1,:]
                 marker2 = data[2,:]
-            elif len(data.shape) == 3 and data.shape[1] == 3:
+            elif len(data.shape) == 2 and data.shape[1] == 3:
                 # 2d array, width 3, 2 marker channels
                 y = data[:,0]
                 marker1 = data[:,1]
@@ -495,31 +495,24 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
             raw_data = y.astype(float32).tobytes()
             # if marker are used combine them into the marker byte
             if (marker1 is not None):
-                marker = left_shift(marker1.astype(bool).astype(uint32), 7)
+                marker = left_shift(marker1.astype(bool).astype(uint8), 6)
                 if (marker2 is not None):
-                    marker = bitwise_or(marker, left_shift(marker2.astype(bool).astype(uint32), 6))
-                marker = marker.tobytes()
+                    marker = bitwise_or(marker, left_shift(marker2.astype(bool).astype(uint8), 7))
+                marker = marker.astype(uint8).tobytes()
             else:
                 marker = bytes(len(y))
             # combine raw data and marker byte
             raw_data = b''.join(raw_data[4*ii:4*(ii+1)]+marker[ii:ii+1] for ii in range(len(y)))
-
-            # for ii in range(len(y)):
-            #     f = y[ii]
-            #     # add to raw data, LSB first
-            #     raw_data = raw_data + struct.pack('<f', f)
-            #     # add an marker byte
-            #     marker = 0
-            #     if (marker1 is not None):
-            #         marker = (bool(marker1[ii]) << 7)
-            #     if (marker2 is not None):
-            #         marker = marker & (bool(marker2[ii]) << 6)
-            #     raw_data = raw_data + marker.to_bytes(1, 'little')
         else:
-            for f in y:
-                # add to raw data, LSB first, signed 16 bit integer
-                # TODO: signed???, embed markers
-                raw_data = raw_data + struct.data('<h', f)
+            # clip input data and make sure datatype is 16 bit unsigned
+            y = y.clip(0, 16383).astype(uint16)
+            # embed marker into the two highest significant bits
+            if (marker1 is not None):
+                y = bitwise_or(y, left_shift(marker1.astype(bool).astype(uint16), 14))
+            if (marker2 is not None):
+                y = bitwise_or(y, left_shift(marker2.astype(bool).astype(uint16), 15))
+            # convert to bytes
+            raw_data = y.tobytes()
 
         # fixme: maybe better to split into chunks to be able to stop transmission?
         self._write_ieee_block(raw_data, ':wlist:waveform:data "{0:s}",{1:d},{2:d},'.format(
