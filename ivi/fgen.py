@@ -486,7 +486,7 @@ class ArbWfm(ivi.IviContainer):
         
         self._output_arbitrary_gain = list()
         self._output_arbitrary_offset = list()
-        self._output_arbitrary_waveform = list()
+        self._output_arbitrary_waveform_handle = list()
         self._arbitrary_sample_rate = 0
         self._arbitrary_waveform_number_waveforms_max = 0
         self._arbitrary_waveform_size_max = 0
@@ -509,10 +509,10 @@ class ArbWfm(ivi.IviContainer):
                         Specifies the offset of the arbitrary waveform the function generator
                         produces. The units are volts.
                         """)
-        self._add_property('outputs[].arbitrary.waveform',
-                        self._get_output_arbitrary_waveform,
-                        self._set_output_arbitrary_waveform,
-                        None,
+        self._add_property('outputs[].arbitrary.waveform.handle',
+                           self._get_output_arbitrary_waveform_handle,
+                           self._set_output_arbitrary_waveform_handle,
+                           None,
                         """
                         """)
         self._add_method('outputs[].arbitrary.configure',
@@ -602,7 +602,7 @@ class ArbWfm(ivi.IviContainer):
         for i in range(self._output_count):
             self._output_arbitrary_gain.append(0)
             self._output_arbitrary_offset.append(0)
-            self._output_arbitrary_waveform.append('')
+            self._output_arbitrary_waveform_handle.append('')
         
         self.outputs._set_list(self._output_name)
     
@@ -624,14 +624,14 @@ class ArbWfm(ivi.IviContainer):
         value = float(value)
         self._output_arbitrary_offset[index] = value
     
-    def _get_output_arbitrary_waveform(self, index):
+    def _get_output_arbitrary_waveform_handle(self, index):
         index = ivi.get_index(self._output_name, index)
-        return self._output_arbitrary_waveform[index]
+        return self._output_arbitrary_waveform_handle[index]
     
-    def _set_output_arbitrary_waveform(self, index, value):
+    def _set_output_arbitrary_waveform_handle(self, index, value):
         index = ivi.get_index(self._output_name, index)
         value = str(value)
-        self._output_arbitrary_waveform[index] = value
+        self._output_arbitrary_waveform_handle[index] = value
     
     def _get_arbitrary_sample_rate(self):
         return self._arbitrary_sample_rate
@@ -656,7 +656,7 @@ class ArbWfm(ivi.IviContainer):
         pass
     
     def _arbitrary_waveform_configure(self, index, handle, gain, offset):
-        self._set_output_arbitrary_waveform(index, handle)
+        self._set_output_arbitrary_waveform_handle(index, handle)
         self._set_output_arbitrary_gain(index, gain)
         self._set_output_arbitrary_offset(index, offset)
     
