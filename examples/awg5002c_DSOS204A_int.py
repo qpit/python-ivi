@@ -28,7 +28,7 @@ awg.arbitrary.sample_rate = fs_awg
 awg.outputs[1].enabled = False
 print('create waveform')
 wfm_handle = awg.arbitrary.waveform.create(data)
-awg.outputs[0].arbitrary.waveform = wfm_handle
+awg.outputs[0].arbitrary.waveform.handle = wfm_handle
 awg.outputs[0].arbitrary.offset = 0.5
 awg.outputs[0].arbitrary.gain = 0.5
 awg.outputs[0].enabled = True

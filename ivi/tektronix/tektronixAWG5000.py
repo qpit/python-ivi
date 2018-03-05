@@ -167,7 +167,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         self._load_id_string()
         return self._identity_instrument_model
     
-    def _get_identity_instrument_firmware_revision(self):
+    def _get_identity_instrument_firmware_revision(self)
         if self._get_cache_valid():
             return self._identity_instrument_firmware_revision
         self._load_id_string()
@@ -377,15 +377,15 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         self._output_arbitrary_offset[index] = value
         self._set_cache_valid(index=index)
     
-    def _get_output_arbitrary_waveform(self, index):
+    def _get_output_arbitrary_waveform_handle(self, index):
         index = ivi.get_index(self._output_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
             resp = self._ask(":source%d:waveform?" % (index+1))
-            self._output_arbitrary_waveform[index] = resp.strip('"').lower()
+            self._output_arbitrary_waveform_handle[index] = resp.strip('"').lower()
             self._set_cache_valid(index=index)
-        return self._output_arbitrary_waveform[index]
+        return self._output_arbitrary_waveform_handle[index]
     
-    def _set_output_arbitrary_waveform(self, index, value):
+    def _set_output_arbitrary_waveform_handle(self, index, value):
         index = ivi.get_index(self._output_name, index)
         value = str(value).lower()
         # waveform must exist on arb
@@ -394,7 +394,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
             raise ivi.ValueNotSupportedException()
         if not self._driver_operation_simulate:
             self._write(":source%d:waveform \"%s\"" % (index+1, value))
-        self._output_arbitrary_waveform[index] = value
+        self._output_arbitrary_waveform_handle[index] = value
     
     def _get_arbitrary_sample_rate(self):
         if not self._driver_operation_simulate and not self._get_cache_valid():
@@ -723,7 +723,7 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
 
     def _set_data_marker_polarity(self, index, value):
         # changing polarity is not supported by the instrument.
-        if value not in MarkerPolarity:
+        if value not in fgen.MarkerPolarity:
             raise ivi.ValueNotSupportedException()
 
     def _get_data_marker_source_channel(self, index):
