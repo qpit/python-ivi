@@ -408,15 +408,15 @@ class tektronixAWG2000(ivi.Driver, fgen.Base, fgen.StdFunc, fgen.ArbWfm,
         self._output_arbitrary_offset[index] = value
         self._set_cache_valid(index=index)
     
-    def _get_output_arbitrary_waveform(self, index):
+    def _get_output_arbitrary_waveform_handle(self, index):
         index = ivi.get_index(self._output_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
             resp = self._ask(":ch%d:waveform?" % (index+1)).split(' ', 1)[1]
-            self._output_arbitrary_waveform[index] = resp.strip('"').lower()
+            self._output_arbitrary_waveform_handle[index] = resp.strip('"').lower()
             self._set_cache_valid(index=index)
-        return self._output_arbitrary_waveform[index]
+        return self._output_arbitrary_waveform_handle[index]
     
-    def _set_output_arbitrary_waveform(self, index, value):
+    def _set_output_arbitrary_waveform_handle(self, index, value):
         index = ivi.get_index(self._output_name, index)
         value = str(value).lower()
         # extension must be wfm
@@ -429,7 +429,7 @@ class tektronixAWG2000(ivi.Driver, fgen.Base, fgen.StdFunc, fgen.ArbWfm,
             raise ivi.ValueNotSupportedException()
         if not self._driver_operation_simulate:
             self._write(":ch%d:waveform \"%s\"" % (index+1, value))
-        self._output_arbitrary_waveform[index] = value
+        self._output_arbitrary_waveform_handle[index] = value
     
     def _get_arbitrary_sample_rate(self):
         if not self._driver_operation_simulate and not self._get_cache_valid():
@@ -562,7 +562,7 @@ class tektronixAWG2000(ivi.Driver, fgen.Base, fgen.StdFunc, fgen.ArbWfm,
     
     def _arbitrary_waveform_create_channel_waveform(self, index, data):
         handle = self._arbitrary_waveform_create(data)
-        self._set_output_arbitrary_waveform(index, handle)
+        self._set_output_arbitrary_waveform_handle(index, handle)
         return handle
     
     

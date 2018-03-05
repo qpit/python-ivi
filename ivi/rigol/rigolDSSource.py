@@ -355,14 +355,14 @@ class rigolDSSource(fgen.Base, fgen.StdFunc, fgen.ArbWfm, fgen.ArbFrequency,
     def _set_output_arbitrary_offset(self, index, value):
         self._set_output_standard_waveform_dc_offset(index, value)
 
-    def _get_output_arbitrary_waveform(self, index):
+    def _get_output_arbitrary_waveform_handle(self, index):
         index = ivi.get_index(self._output_name, index) 
-        return self._output_arbitrary_waveform[index]
+        return self._output_arbitrary_waveform_handle[index]
 
-    def _set_output_arbitrary_waveform(self, index, value):
+    def _set_output_arbitrary_waveform_handle(self, index, value):
         index = ivi.get_index(self._output_name, index)
         value = str(value)
-        self._output_arbitrary_waveform[index] = value
+        self._output_arbitrary_waveform_handle[index] = value
 
     def _get_arbitrary_sample_rate(self):
         return self._arbitrary_sample_rate
@@ -387,7 +387,7 @@ class rigolDSSource(fgen.Base, fgen.StdFunc, fgen.ArbWfm, fgen.ArbFrequency,
         pass
 
     def _arbitrary_waveform_configure(self, index, handle, gain, offset):
-        self._set_output_arbitrary_waveform(index, handle)
+        self._set_output_arbitrary_waveform_handle(index, handle)
         self._set_output_arbitrary_gain(index, gain)
         self._set_output_arbitrary_offset(index, offset)
 
