@@ -480,7 +480,7 @@ class agilentBaseS(agilentBaseInfiniium):
         trace.y_increment = float(pre[7])
         trace.y_origin = float(pre[8])
         trace.y_reference = int(float(pre[9]))
-        trace.y_hole = 0
+        trace.y_hole = None
 
         if acq_type == 1:
             raise scope.InvalidAcquisitionTypeException()
