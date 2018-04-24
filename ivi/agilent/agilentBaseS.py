@@ -218,6 +218,23 @@ class agilentBaseS(agilentBaseInfiniium):
 
         return self._read_ieee_block()
 
+    def _get_acquisition_number_of_points_minimum(self):
+        if not self._driver_operation_simulate and not self._get_cache_valid():
+            value = int(self._ask(':acquire:points?'))
+            self._acquisition_number_of_points_minimum = value
+            self._set_cache_valid()
+        return self._acquisition_number_of_points_minimum
+
+    def _set_acquisition_number_of_points_minimum(self, value):
+        try:
+            value = int(value)
+        except ValueError:
+            if value != 'auto':
+                raise Exception('Invalid value for number of points. Specify integer or auto')
+        self._write(':acquire:points {0}'.format(value))
+        self._acquisition_number_of_points_minimum = value
+        self._set_cache_valid()
+
     def _get_channel_input_impedance(self, index):
         index = ivi.get_index(self._analog_channel_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
