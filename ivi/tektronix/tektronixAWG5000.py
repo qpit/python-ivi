@@ -63,6 +63,15 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
                            """
                            Returns the status of the arbitrary waveform generator or the sequencer.
                            """)
+
+        self._add_property('outputs[].lowpass_filter_cutoff',
+                           self._get_output_LPF_freqCutOff,
+                           self._set_output_LPF_freqCutOff,
+                           None,
+                           """
+                           Optional internal lowpass filter with cutoff specified in Hz.
+                           To disable it set it to inf ('Through').
+                           """)
         
         self._output_count = 2
         
@@ -97,6 +106,10 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         self._identity_specification_major_version = 5
         self._identity_specification_minor_version = 0
         self._identity_supported_instrument_models = ['AWG5002a','AWG5002c'] # FIXME
+
+        self._output_LPF_freqCutOff = list()
+        for ii in range(self._output_count):
+            self._output_LPF_freqCutOff.append(inf)
         
         self._init_outputs()
         self._init_data_markers()
@@ -289,6 +302,30 @@ class tektronixAWG5000(ivi.Driver, fgen.Base, fgen.ArbWfm,
         value = 50
         self._output_impedance[index] = value
     
+    def _get_output_LPF_freqCutOff(self, index):
+        index = ivi.get_index(self._output_name, index)
+        if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
+            resp = self._ask(":output%d:filter:lpass:frequency?" % (index+1))
+            value = float(resp)
+            if value > 100e6:
+                value = inf
+            self._output_LPF_freqCutOff[index] = value
+            self._set_cache_valid(index=index)
+        return self._output_LPF_freqCutOff[index]
+    
+    def _set_output_LPF_freqCutOff(self, index, value):
+        index = ivi.get_index(self._output_name, index)
+        value = float(value)
+        if not self._driver_operation_simulate:
+            if value == inf:
+                self._write(":output%d:filter:lpass:frequency INF" % (index + 1))
+            else:
+                if value not in [20e6, 100e6]:
+                    raise ivi.ValueNotSupportedException("Only 20 MHz or 100 MHz allowed as cutoffs for the low pass filter.")
+                self._write(":output%d:filter:lpass:frequency %e" % (index+1, value))
+        self._output_LPF_freqCutOff[index] = value
+        self._set_cache_valid(index=index)
+            
     def _get_output_mode(self, index):
         index = ivi.get_index(self._output_name, index)
         if not self._driver_operation_simulate and not self._get_cache_valid(index=index):
